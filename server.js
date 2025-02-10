@@ -1,7 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { exec, spawn } = require('child_process');
+const { spawn } = require('child_process');
 const cors = require('cors');
 const app = express();
 
@@ -33,6 +33,7 @@ app.post('/compiler', (req, res) => {
 
     const fileExtension = codeTypes[language];
     const filename = `test.${fileExtension}`;
+    const outputBinary = 'test.out';
     let execCmd = [];
     let result = '';
 
@@ -42,104 +43,69 @@ app.post('/compiler', (req, res) => {
     try {
         // Determine the execution command based on the language
         if (language === 'javascript') {
-            // JavaScript: Execute using Node.js
             execCmd = ['node', filename];
         } else if (language === 'python') {
-            // Python: Execute using Python
             execCmd = ['python3', filename];
         } else if (language === 'c') {
-            // C: Compile with gcc and then run
-            execCmd = ['gcc', filename, '-o', 'test.out'];
+            execCmd = ['gcc', filename, '-o', outputBinary];
         } else if (language === 'cpp') {
-            // C++: Compile with g++ and then run
-            execCmd = ['g++', filename, '-o', 'test.out'];
+            execCmd = ['g++', filename, '-o', outputBinary];
         }
 
-        // Compile the code (if necessary) for C and C++ languages
-        const processCompile = spawn(execCmd[0], execCmd.slice(1), { shell: true });
-
-        // Capture compilation errors and logs
-        processCompile.stdout.on('data', (data) => {
-            console.log(`stdout: ${data}`);
-            result += data.toString();
-        });
-
-        processCompile.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`);
-            result += data.toString();
-        });
-
-        processCompile.on('exit', (code) => {
-            if (code !== 0) {
-                return res.status(400).json({ error: `Compilation failed with exit code ${code}. Logs: ${result}` });
-            }
-
-            if (language === 'c' || language === 'cpp') {
-                // After compiling, set execute permissions for the compiled binary (if on Linux)
-                if (getPlatform() === 'linux') {
-                    exec('chmod +x test.out', (err, stdout, stderr) => {
-                        if (err) {
-                            console.error(`chmod failed: ${stderr}`);
-                            return res.status(500).json({ error: `Permission error: ${stderr}` });
-                        }
-                    });
+        // Compile if needed (for C and C++)
+        if (language === 'c' || language === 'cpp') {
+            const compileProcess = spawn(execCmd[0], execCmd.slice(1), { shell: true });
+            compileProcess.stderr.on('data', (data) => result += data.toString());
+            compileProcess.on('exit', (code) => {
+                if (code !== 0) {
+                    cleanUp();
+                    return res.status(400).json({ error: `Compilation failed. Logs: ${result}` });
                 }
-
-                // Run the compiled binary for C and C++
-                const execFile = spawn('./test.out', { input });
-
-                execFile.stdout.on('data', (data) => {
-                    console.log(`stdout: ${data}`);
-                    result += data.toString();
-                });
-
-                execFile.stderr.on('data', (data) => {
-                    console.error(`stderr: ${data}`);
-                    result += data.toString();
-                });
-
-                execFile.on('exit', (exitCode) => {
-                    if (exitCode !== 0) {
-                        return res.status(400).json({ error: `Execution failed with exit code ${exitCode}. Logs: ${result}` });
-                    }
-                    res.status(200).json({ output: result });
-                    cleanUp();
-                });
-            } else {
-                // For non-C/C++ languages, just execute directly
-                const process = spawn(execCmd[0], execCmd.slice(1), { input });
-
-                process.stdout.on('data', (data) => {
-                    console.log(`stdout: ${data}`);
-                    result += data.toString();
-                });
-
-                process.stderr.on('data', (data) => {
-                    console.error(`stderr: ${data}`);
-                    result += data.toString();
-                });
-
-                process.on('exit', (exitCode) => {
-                    if (exitCode !== 0) {
-                        return res.status(400).json({ error: `Execution failed with exit code ${exitCode}. Logs: ${result}` });
-                    }
-                    res.status(200).json({ output: result });
-                    cleanUp();
-                });
-            }
-        });
+                executeBinary(res, input);
+            });
+        } else {
+            executeProcess(res, execCmd, input);
+        }
     } catch (error) {
         console.error(`Error: ${error.message}`);
         res.status(500).json({ error: `Internal Server Error: ${error.message}` });
         cleanUp();
     }
 
-    // Clean up generated files (temporary files)
+    // Execute compiled binary (for C/C++)
+    function executeBinary(res, input) {
+        const runProcess = spawn(`./${outputBinary}`);
+        if (input) runProcess.stdin.write(input + "\n");
+        runProcess.stdin.end();
+        captureProcessOutput(runProcess, res);
+    }
+
+    // Execute script (for Python/JS)
+    function executeProcess(res, cmd, input) {
+        const runProcess = spawn(cmd[0], cmd.slice(1));
+        if (input) runProcess.stdin.write(input + "\n");
+        runProcess.stdin.end();
+        captureProcessOutput(runProcess, res);
+    }
+
+    // Capture output and handle errors
+    function captureProcessOutput(process, res) {
+        let output = '';
+        process.stdout.on('data', (data) => output += data.toString());
+        process.stderr.on('data', (data) => output += data.toString());
+        process.on('exit', (exitCode) => {
+            cleanUp();
+            if (exitCode !== 0) {
+                return res.status(400).json({ error: `Execution failed. Logs: ${output}` });
+            }
+            res.status(200).json({ output });
+        });
+    }
+
+    // Clean up generated files
     function cleanUp() {
-        fs.unlinkSync(filename);
-        if (fs.existsSync('test.out')) {
-            fs.unlinkSync('test.out');
-        }
+        if (fs.existsSync(filename)) fs.unlinkSync(filename);
+        if (fs.existsSync(outputBinary)) fs.unlinkSync(outputBinary);
     }
 });
 
