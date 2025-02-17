@@ -25,7 +25,7 @@ function getPlatform() {
 // POST route to handle code compilation and execution
 app.post('/compiler', (req, res) => {
     const { language, code, input } = req.body;
-    
+
     // Validate the language
     if (!codeTypes[language]) {
         return res.status(400).json({ error: 'Unsupported language' });
@@ -75,7 +75,7 @@ app.post('/compiler', (req, res) => {
     // Execute compiled binary (for C/C++)
     function executeBinary(res, input) {
         const runProcess = spawn(`./${outputBinary}`);
-        if (input) runProcess.stdin.write(input + "\n");
+        if (input) runProcess.stdin.write(input + "\n"); // Provide input to the compiled binary
         runProcess.stdin.end();
         captureProcessOutput(runProcess, res);
     }
@@ -83,7 +83,7 @@ app.post('/compiler', (req, res) => {
     // Execute script (for Python/JS)
     function executeProcess(res, cmd, input) {
         const runProcess = spawn(cmd[0], cmd.slice(1));
-        if (input) runProcess.stdin.write(input + "\n");
+        if (input) runProcess.stdin.write(input + "\n"); // Provide input to the script
         runProcess.stdin.end();
         captureProcessOutput(runProcess, res);
     }
