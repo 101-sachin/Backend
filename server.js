@@ -27,7 +27,7 @@ app.post("/execute", async (req, res) => {
     }
 
     try {
-        const response = await axios.post("https://api.jdoodle.com/v1/execute", {
+        const response = await fetch.post("https://api.jdoodle.com/v1/execute", {
             script: code,
             language: languageMap[language],
             versionIndex: "0",
