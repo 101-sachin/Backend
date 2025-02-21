@@ -1,14 +1,13 @@
 const express = require("express");
 const axios = require("axios");
 const cors = require("cors");
-require("dotenv").config();
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-const JDoodle_CLIENT_ID = "your_client_id"; // Replace with your JDoodle Client ID
-const JDoodle_CLIENT_SECRET = "your_client_secret"; // Replace with your JDoodle Client Secret
+const JDoodle_CLIENT_ID = "86f87263761cd5b87b4f4c09d99bcf2f"; 
+const JDoodle_CLIENT_SECRET = "4c13ec68477e5617e1db5fffc6134f15a69feca76bbf402c5f61a34c2daba9ed"; 
 
 const languageMap = {
     "python": "python3",
